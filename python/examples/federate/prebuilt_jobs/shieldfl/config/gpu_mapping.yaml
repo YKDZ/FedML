@@ -1,0 +1,5 @@
+mapping_default:
+  host1:
+    - [0, 0]
+    - [0, 1]
+    - [0, 2]
