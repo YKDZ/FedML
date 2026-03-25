@@ -1,10 +1,14 @@
+from .resnet18 import ResNet18
 from .resnet20 import ResNet20
 from .simple_cnn import SimpleCNN
+from .lenet5 import LeNet5
 
 
 MODEL_REGISTRY = {
     "SimpleCNN": SimpleCNN,
     "ResNet20": ResNet20,
+    "ResNet18": ResNet18,
+    "LeNet5": LeNet5,
 }
 
 

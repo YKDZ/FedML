@@ -1,0 +1,71 @@
+# M3: VeriFL 防御 vs Byzantine 攻击 — ResNet18 + CIFAR10, 5 客户端 (1 恶意)
+# 注意：VeriFL 聚合器 + FedML 内置防御必须分别测试以避免双重防御污染
+# 此配置使用 VeriFL 作为防御机制
+common_args:
+  training_type: "cross_silo"
+  random_seed: 0
+
+data_args:
+  dataset: "cifar10"
+  data_cache_dir: ./data
+  partition_method: "hetero"
+  partition_alpha: 0.5
+  val_per_class: 50
+  trust_per_class: 50
+  max_samples_per_client: 300
+  test_subset_size: 500
+  num_workers: 0
+
+model_args:
+  model: "ResNet18"
+
+train_args:
+  federated_optimizer: "FedAvg"
+  client_id_list:
+  client_num_in_total: 5
+  client_num_per_round: 5
+  comm_round: 3
+  epochs: 1
+  batch_size: 32
+  client_optimizer: sgd
+  learning_rate: 0.01
+  weight_decay: 0.0
+  momentum: 0.9
+  server_momentum: 0.9
+  server_lr: 0.3
+  pop_size: 15
+  generations: 10
+  lambda_reg: 0.01
+  cpu_transfer: true
+  enable_attack: true
+  attack_type: "byzantine"
+  byzantine_client_num: 1
+  attack_mode: "flip"
+  enable_defense: false    # VeriFL 聚合器本身作为防御，FedML 内置防御关闭
+  defense_type: "none"
+  debug_state_tracking: false
+
+validation_args:
+  frequency_of_the_test: 1
+
+device_args:
+  worker_num: 5
+  using_gpu: false
+  gpu_mapping_file: config/gpu_mapping.yaml
+  gpu_mapping_key: mapping_5clients
+
+comm_args:
+  backend: "MPI"
+  is_mobile: 0
+
+tracking_args:
+  log_file_dir: ./log
+  enable_wandb: false
+  using_mlops: false
+
+shieldfl_args:
+  runtime_mode: "cpu-deterministic"
+  enforce_determinism: true
+  sort_client_updates: true
+  aggregator_type: "verifl"
+  metrics_output_dir: "./results"

@@ -1,5 +1,5 @@
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -18,6 +18,7 @@ class ShieldFLDataAssets:
     test_loader: DataLoader
     val_images: torch.Tensor
     val_labels: torch.Tensor
+    num_classes: int = 10
 
 
 def _seeded_dataloader(dataset, batch_size, shuffle, seed, num_workers=0):
@@ -69,6 +70,64 @@ def _load_cifar10(data_path: str):
         root=str(root_path), train=True, download=False, transform=server_val_transform
     )
     return trainset, testset, server_val_base_dataset
+
+
+def _load_mnist(data_path: str):
+    """加载 MNIST 数据集，返回 (trainset, testset, server_val_base_dataset)。"""
+    root_path = Path(data_path).expanduser().resolve()
+    mnist_dir = root_path / "MNIST"
+    should_download = not mnist_dir.exists()
+    mean = (0.1307,)
+    std = (0.3081,)
+    transform_train = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+        ]
+    )
+    transform_test = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+        ]
+    )
+    trainset = datasets.MNIST(
+        root=str(root_path), train=True, download=should_download, transform=transform_train
+    )
+    testset = datasets.MNIST(
+        root=str(root_path), train=False, download=should_download, transform=transform_test
+    )
+    server_val_base_dataset = datasets.MNIST(
+        root=str(root_path), train=True, download=False, transform=transform_train
+    )
+    return trainset, testset, server_val_base_dataset
+
+
+def _stratified_balanced_sample(targets, num_per_class: int, num_classes: int, seed: int, exclude: set = None):
+    """分层均衡采样：每个类别恰好采 num_per_class 个样本，返回采样到的全局索引列表。
+
+    Args:
+        targets: 数组或列表，长度为数据集大小，每个元素是类别标签。
+        num_per_class: 每类取样数量。
+        num_classes: 类别总数。
+        seed: 随机种子。
+        exclude: 已占用的索引集合（不允许重叠），默认为 None。
+
+    Returns:
+        selected: 选中的全局索引列表（已打乱）。
+    """
+    if exclude is None:
+        exclude = set()
+    targets_array = np.array(targets)
+    rng = np.random.default_rng(int(seed))
+    selected = []
+    for cls in range(num_classes):
+        cls_indices = np.where(targets_array == cls)[0].tolist()
+        available = [i for i in cls_indices if i not in exclude]
+        rng.shuffle(available)
+        selected.extend(available[:num_per_class])
+    rng.shuffle(selected)
+    return selected
 
 
 def _to_abs_size(value, total_size):
@@ -125,8 +184,8 @@ class _IndexedDatasetView:
 
 def load_shieldfl_data(args) -> Tuple[list, ShieldFLDataAssets]:
     dataset_name = str(getattr(args, "dataset", "cifar10")).upper()
-    if dataset_name != "CIFAR10":
-        raise ValueError(f"Phase 1 currently only supports CIFAR10, got {dataset_name}")
+    if dataset_name not in ("CIFAR10", "MNIST"):
+        raise ValueError(f"Supported datasets: CIFAR10, MNIST. Got: {dataset_name}")
 
     data_path = getattr(args, "data_cache_dir", "./data")
     seed = int(getattr(args, "random_seed", 0))
@@ -134,18 +193,42 @@ def load_shieldfl_data(args) -> Tuple[list, ShieldFLDataAssets]:
     num_workers = int(getattr(args, "num_workers", 0))
     client_num = int(getattr(args, "client_num_in_total", 3))
     alpha = float(getattr(args, "partition_alpha", 0.5))
-    val_size = _to_abs_size(getattr(args, "server_val_size", 100), 50000)
-    trust_size = _to_abs_size(getattr(args, "server_trust_size", 100), 50000)
     client_pool_max_size = int(getattr(args, "client_pool_max_size", 0) or 0)
     max_samples_per_client = int(getattr(args, "max_samples_per_client", 0) or 0)
     test_subset_size = int(getattr(args, "test_subset_size", 0) or 0)
 
-    trainset, testset, server_val_base_dataset = _load_cifar10(data_path)
-    shuffled_train_indices = np.random.default_rng(seed).permutation(len(trainset)).tolist()
+    # 分层均衡采样参数：每类取几个样本给 val / trust
+    num_classes = 10
+    val_per_class = int(getattr(args, "val_per_class", 0) or 0)
+    trust_per_class = int(getattr(args, "trust_per_class", 0) or 0)
+    # 兼容旧接口：若未设置 per_class，则换算（向下取整到每类）
+    if val_per_class == 0:
+        raw_val_size = _to_abs_size(getattr(args, "server_val_size", 100), 50000)
+        val_per_class = max(1, raw_val_size // num_classes)
+    if trust_per_class == 0:
+        raw_trust_size = _to_abs_size(getattr(args, "server_trust_size", 100), 50000)
+        trust_per_class = max(1, raw_trust_size // num_classes)
 
-    server_val_indices = shuffled_train_indices[:val_size]
-    server_trust_indices = shuffled_train_indices[val_size : val_size + trust_size]
-    client_pool_indices = shuffled_train_indices[val_size + trust_size :]
+    if dataset_name == "CIFAR10":
+        trainset, testset, server_val_base_dataset = _load_cifar10(data_path)
+    else:
+        trainset, testset, server_val_base_dataset = _load_mnist(data_path)
+
+    all_targets = list(trainset.targets) if hasattr(trainset.targets, '__iter__') else trainset.targets
+    total_train = len(trainset)
+
+    # 分层均衡采样 val / trust
+    server_val_indices = _stratified_balanced_sample(
+        all_targets, val_per_class, num_classes, seed=seed, exclude=set()
+    )
+    server_trust_indices = _stratified_balanced_sample(
+        all_targets, trust_per_class, num_classes, seed=seed + 1, exclude=set(server_val_indices)
+    )
+
+    occupied = set(server_val_indices) | set(server_trust_indices)
+    all_indices = list(range(total_train))
+    client_pool_indices = [i for i in all_indices if i not in occupied]
+    np.random.default_rng(seed + 2).shuffle(client_pool_indices)
 
     if client_pool_max_size > 0:
         client_pool_indices = client_pool_indices[:client_pool_max_size]
@@ -201,7 +284,7 @@ def load_shieldfl_data(args) -> Tuple[list, ShieldFLDataAssets]:
         train_data_local_num_dict,
         train_data_local_dict,
         test_data_local_dict,
-        10,
+        num_classes,
     ]
     assets = ShieldFLDataAssets(
         trainset=trainset,
@@ -212,5 +295,6 @@ def load_shieldfl_data(args) -> Tuple[list, ShieldFLDataAssets]:
         test_loader=test_loader,
         val_images=val_images,
         val_labels=val_labels,
+        num_classes=num_classes,
     )
     return dataset, assets

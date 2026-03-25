@@ -8,9 +8,8 @@ from fedml.core import ClientTrainer
 
 class VeriFLTrainer(ClientTrainer):
     def __init__(self, model, args):
-        super().__init__(model, args)
-        self.attack_type = str(getattr(args, "attack_type", "none"))
         self.cpu_transfer = bool(getattr(args, "cpu_transfer", True))
+        super().__init__(model, args)
 
     def get_model_params(self):
         if self.cpu_transfer:
@@ -21,10 +20,8 @@ class VeriFLTrainer(ClientTrainer):
         self.model.load_state_dict(model_parameters, strict=True)
 
     def train(self, train_data, device, args):
-        if self.attack_type != "none":
-            raise NotImplementedError(
-                "Phase 1 only validates the no-attack path. Attack migration starts in Phase 2."
-            )
+        # Phase 2: 攻击注入由 FedML 内置机制负责；
+        # label_flipping 在 update_dataset() 中处理，模型攻击在聚合器 on_before_aggregation() 中处理。
         model = self.model
         model.to(device)
         model.train()

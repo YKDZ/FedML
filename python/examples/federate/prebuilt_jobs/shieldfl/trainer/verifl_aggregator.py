@@ -1,16 +1,20 @@
 import copy
 import logging
+import time
 from collections import OrderedDict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 
 from fedml.core import ServerAggregator
+from fedml.core.security.fedml_attacker import FedMLAttacker
 
 from .gpu_accelerator import GPUAccelerator
 from .micro_ga_base import MicroGABase
+from eval.asr import evaluate_asr
+from eval.metrics import MetricsCollector
 
 
 def aggregate_weighted(weights_results, alpha):
@@ -56,6 +60,12 @@ class VeriFLAggregator(ServerAggregator, MicroGABase):
             (data_assets.val_images, data_assets.val_labels),
             device=self.device,
         )
+        self._last_agg_time: Optional[float] = None
+
+        # 结构化指标采集
+        metrics_dir = str(getattr(args, "metrics_output_dir", "./results"))
+        setattr(args, "aggregator_type", "verifl")
+        self._metrics_collector: Optional[MetricsCollector] = MetricsCollector(metrics_dir, args)
 
     def get_model_params(self):
         return self.model.cpu().state_dict()
@@ -78,6 +88,16 @@ class VeriFLAggregator(ServerAggregator, MicroGABase):
 
     def on_before_aggregation(self, raw_client_model_or_grad_list: List[Tuple[float, OrderedDict]]):
         raw_client_model_or_grad_list = list(raw_client_model_or_grad_list)
+        # Phase 2: 接入 FedMLAttacker 模型攻击钩子（byzantine / model_replacement）
+        if FedMLAttacker.get_instance().is_model_attack():
+            raw_client_model_or_grad_list = FedMLAttacker.get_instance().attack_model(
+                raw_client_grad_list=raw_client_model_or_grad_list,
+                extra_auxiliary_info=self.get_model_params(),
+            )
+            logging.info(
+                "VeriFL on_before_aggregation: FedMLAttacker model attack applied | attack_type=%s",
+                FedMLAttacker.get_instance().get_attack_types(),
+            )
         client_idxs = [idx for idx in range(len(raw_client_model_or_grad_list))]
         logging.info(
             "VeriFL on_before_aggregation: %s client updates | deterministic_order=%s | order_source=fedml_client_index_iteration",
@@ -116,6 +136,7 @@ class VeriFLAggregator(ServerAggregator, MicroGABase):
             return 0.0
 
     def aggregate(self, raw_client_model_or_grad_list: List[Tuple[float, OrderedDict]]):
+        _t0 = time.time()
         weights_results = [
             self._ordered_dict_to_ndarrays(client_state)
             for _, client_state in raw_client_model_or_grad_list
@@ -224,6 +245,19 @@ class VeriFLAggregator(ServerAggregator, MicroGABase):
             best_fitness,
             np.round(best_weights, 4),
         )
+        self._last_agg_time = time.time() - _t0
+        logging.info("VeriFL aggregate_time=%.4fs", self._last_agg_time)
+
+        # 状态诊断日志（可通过 debug_state_tracking: true 开启）
+        if bool(getattr(self.args, "debug_state_tracking", False)):
+            gb_norm = np.sqrt(sum(np.sum(x ** 2) for x in self.global_model_buffer))
+            vb_norm = np.sqrt(sum(np.sum(x ** 2) for x in self.velocity_buffer))
+            logging.info(
+                "VeriFL state_check | global_buffer_norm=%.6f | velocity_buffer_norm=%.6f",
+                gb_norm,
+                vb_norm,
+            )
+
         return self._ndarrays_to_ordered_dict(final_params)
 
     def _evaluate_arrays(self, weights: List[np.ndarray], loader):
@@ -282,6 +316,32 @@ class VeriFLAggregator(ServerAggregator, MicroGABase):
             metrics["test_accuracy"],
             metrics["test_total"],
         )
+
+        # ASR 评估
+        asr_value = None
+        if bool(getattr(args, "eval_asr", False)) and self.data_assets is not None:
+            asr_result = evaluate_asr(
+                model=model,
+                test_loader=self.data_assets.test_loader,
+                device=device,
+                target_label=int(getattr(args, "target_label", 0)),
+                trigger_size=int(getattr(args, "trigger_size", 3)),
+                trigger_value=float(getattr(args, "trigger_value", 1.0)),
+            )
+            asr_value = asr_result["asr"]
+            metrics.update({f"asr_{k}": v for k, v in asr_result.items()})
+
+        # 写入结构化指标
+        if self._metrics_collector is not None:
+            round_idx = int(getattr(args, "round_idx", -1))
+            self._metrics_collector.log_round(
+                round_idx=round_idx,
+                test_accuracy=metrics["test_accuracy"],
+                test_loss=metrics["test_loss"],
+                test_total=int(metrics["test_total"]),
+                asr=asr_value,
+                agg_time=self._last_agg_time,
+            )
         return metrics
 
     def test_all(self, train_data_local_dict, test_data_local_dict, device, args) -> bool:
