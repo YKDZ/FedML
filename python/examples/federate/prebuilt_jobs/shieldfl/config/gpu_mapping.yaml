@@ -21,3 +21,30 @@ mapping_7clients:
     - [0, 4]
     - [0, 5]
     - [0, 6]
+
+# 单 GPU 全映射：server + 10 clients 全部映射到 GPU 0
+# 适用于 single-gpu-deterministic 和 single-gpu-fast 模式
+mapping_single_gpu:
+  host1:
+    - [0, 0]
+    - [0, 1]
+    - [0, 2]
+    - [0, 3]
+    - [0, 4]
+    - [0, 5]
+    - [0, 6]
+    - [0, 7]
+    - [0, 8]
+    - [0, 9]
+    - [0, 10]
+
+# 多 GPU 映射（预留）：server + 5 clients 分布到 3 张 GPU
+# GPU 0: server + client1；GPU 1: client2 + client3；GPU 2: client4 + client5
+mapping_multi_gpu_5clients:
+  host1:
+    - [0, 0]
+    - [0, 1]
+    - [1, 2]
+    - [1, 3]
+    - [2, 4]
+    - [2, 5]

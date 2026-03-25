@@ -1,4 +1,5 @@
 import copy
+import logging
 from typing import List, Tuple
 
 import numpy as np
@@ -26,6 +27,15 @@ class GPUAccelerator:
         self.param_sizes = [value.numel() for value in state_values]
         self.total_params = sum(self.param_sizes)
         self.client_params_matrix = None
+        logging.info(
+            "GPUAccelerator initialized | device=%s | has_batchnorm=%s | total_params=%d | "
+            "val_images.shape=%s | val_labels.shape=%s",
+            self.device,
+            self.has_batchnorm,
+            self.total_params,
+            tuple(self.val_images.shape),
+            tuple(self.val_labels.shape),
+        )
 
     def _load_state_from_ndarrays(self, params: List[np.ndarray]):
         state_values = list(self.model_template.state_dict().values())
@@ -62,6 +72,17 @@ class GPUAccelerator:
         for index, params in enumerate(client_parameters):
             flat_params = np.concatenate([param.ravel() for param in params])
             self.client_params_matrix[index] = torch.tensor(flat_params, device=self.device)
+        mem_mb = (
+            self.client_params_matrix.element_size()
+            * self.client_params_matrix.nelement()
+            / (1024 ** 2)
+        )
+        logging.info(
+            "GPUAccelerator client_params_matrix: shape=%s mem=%.1fMB device=%s",
+            tuple(self.client_params_matrix.shape),
+            mem_mb,
+            self.device,
+        )
 
     def calculate_fitness(self, alpha: np.ndarray) -> Tuple[float, float]:
         if self.client_params_matrix is None:

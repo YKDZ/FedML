@@ -35,12 +35,16 @@ class MetricsCollector:
 
         fname = f"metrics_{model_name}_{dataset}_{aggregator_type}_atk{attack_type}_def{defense_type}_seed{seed}.jsonl"
         self.metrics_file = os.path.join(output_dir, fname)
+        import torch
         self._meta = {
             "aggregator": aggregator_type,
             "attack_type": attack_type,
             "defense_type": defense_type,
             "model": model_name,
             "dataset": dataset,
+            "runtime_mode": str(getattr(args, "runtime_mode", "unknown")),
+            "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
+            "cuda_version": torch.version.cuda if torch.cuda.is_available() else "N/A",
         }
         logging.info("MetricsCollector initialized | output=%s", self.metrics_file)
 
