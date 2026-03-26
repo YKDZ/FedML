@@ -2,7 +2,7 @@
 # M3：防御对照 GPU 正式实验
 # 两部分：
 #   A) FedML 内置防御（BaselineAggregator）：
-#      defense={RFA,krum,coordinate_wise_trimmed_mean,cclip,bulyan}
+#      defense={rfa,krum,trimmed_mean,cclip}
 #      × attack={byzantine,label_flipping,model_replacement}
 #      × PMR={0.1,0.2,0.3,0.4} × alpha={0.1,0.3,0.5,100}
 #      × seeds={0,1,2} × 两条任务线 = 5×3×4×4×3×2 = 1440 次
@@ -14,7 +14,7 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
-DEFENSES="RFA krum coordinate_wise_trimmed_mean cclip bulyan"
+DEFENSES="rfa krum trimmed_mean cclip"
 ATTACKS="byzantine label_flipping model_replacement"
 PMRS="0.1 0.2 0.3 0.4"
 ALPHAS="0.1 0.3 0.5 100"

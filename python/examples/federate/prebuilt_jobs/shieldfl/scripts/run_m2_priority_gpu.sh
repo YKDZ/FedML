@@ -21,6 +21,15 @@ ROUNDS_MNIST=50
 TOTAL=$(echo "$ATTACKS" | wc -w)
 TOTAL=$((TOTAL * 1 * 2 * 3 * 2))
 COUNT=0
+SKIP=0
+RESULTS_DIR="$(cd "$DIR/.." && pwd)/results"
+
+# 检查是否已有结果文件（断点续跑）
+check_done() {
+	local model=$1 dataset=$2 agg=$3 atk=$4 def=$5 alpha=$6 seed=$7
+	local f="${RESULTS_DIR}/metrics_${model}_${dataset}_${agg}_atk${atk}_def${def}_a${alpha}_seed${seed}.jsonl"
+	[[ -f "$f" ]] && return 0 || return 1
+}
 
 echo "=== M2 Attacks GPU (Priority Subset) ==="
 echo "GPU_ID=${GPU_ID}  Total experiments: ${TOTAL}"
@@ -32,6 +41,11 @@ for ATTACK in $ATTACKS; do
 		for ALPHA in $ALPHAS; do
 			for SEED in $SEEDS; do
 				COUNT=$((COUNT + 1))
+				if check_done ResNet18 cifar10 fedavg "${ATTACK}" none "${ALPHA}" "${SEED}"; then
+					echo "[$COUNT/$TOTAL] SKIP (result exists) attack=${ATTACK} alpha=${ALPHA} seed=${SEED}"
+					SKIP=$((SKIP + 1))
+					continue
+				fi
 				echo ""
 				echo "[$COUNT/$TOTAL] [M2-CIFAR10] attack=${ATTACK} pmr=${PMR} alpha=${ALPHA} seed=${SEED}  $(date '+%H:%M:%S')"
 				bash "$DIR/run_experiment.sh" \
@@ -53,6 +67,11 @@ for ATTACK in $ATTACKS; do
 		for ALPHA in $ALPHAS; do
 			for SEED in $SEEDS; do
 				COUNT=$((COUNT + 1))
+				if check_done LeNet5 mnist fedavg "${ATTACK}" none "${ALPHA}" "${SEED}"; then
+					echo "[$COUNT/$TOTAL] SKIP (result exists) attack=${ATTACK} alpha=${ALPHA} seed=${SEED}"
+					SKIP=$((SKIP + 1))
+					continue
+				fi
 				echo ""
 				echo "[$COUNT/$TOTAL] [M2-MNIST] attack=${ATTACK} pmr=${PMR} alpha=${ALPHA} seed=${SEED}  $(date '+%H:%M:%S')"
 				bash "$DIR/run_experiment.sh" \
@@ -69,4 +88,4 @@ for ATTACK in $ATTACKS; do
 done
 
 echo ""
-echo "=== M2 Priority Subset DONE at $(date '+%Y-%m-%d %H:%M:%S') ==="
+echo "=== M2 Priority Subset DONE at $(date '+%Y-%m-%d %H:%M:%S') (skipped ${SKIP}) ==="

@@ -78,6 +78,7 @@ fi
 
 ENABLE_DEFENSE="false"
 DEFENSE_TYPE="none"
+TRIM_BETA="0.2"
 if [[ "$DEFENSE" != "none" ]]; then
   ENABLE_DEFENSE="true"
   DEFENSE_TYPE="$DEFENSE"
@@ -130,10 +131,14 @@ train_args:
   attack_mode: "flip"
   enable_defense: ${ENABLE_DEFENSE}
   defense_type: "${DEFENSE_TYPE}"
+  beta: ${TRIM_BETA}
   eval_asr: ${EVAL_ASR}
   target_label: 0
   trigger_size: 3
   trigger_value: 1.0
+  original_class_list: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  target_class_list: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+  ratio_of_poisoned_client: ${PMR}
 
 validation_args:
   frequency_of_the_test: 1
