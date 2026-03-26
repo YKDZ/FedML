@@ -280,3 +280,5 @@ python/examples/launch/hello_world/fedml_job_entry_pack.bat
 
 doc.fedml.ai/
 ShieldFL/
+
+REMOTE_GPU_SERVER.md

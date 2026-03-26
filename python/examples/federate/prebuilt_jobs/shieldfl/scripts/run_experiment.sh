@@ -32,33 +32,93 @@ GPU_MAPPING_KEY="mapping_default"
 CPU_TRANSFER="true"
 
 while [[ $# -gt 0 ]]; do
-  case $1 in
-    --model)      MODEL="$2";       shift 2 ;;
-    --dataset)    DATASET="$2";     shift 2 ;;
-    --attack)     ATTACK="$2";      shift 2 ;;
-    --defense)    DEFENSE="$2";     shift 2 ;;
-    --aggregator) AGGREGATOR="$2";  shift 2 ;;
-    --pmr)        PMR="$2";         shift 2 ;;
-    --alpha)      ALPHA="$2";       shift 2 ;;
-    --seed)       SEED="$2";        shift 2 ;;
-    --rounds)     ROUNDS="$2";      shift 2 ;;
-    --clients)    CLIENTS="$2";     shift 2 ;;
-    --epochs)     EPOCHS="$2";      shift 2 ;;
-    --batch_size) BATCH="$2";       shift 2 ;;
-    --max_samples)    MAX_SAMPLES="$2";    shift 2 ;;
-    --test_subset)   TEST_SUBSET="$2";    shift 2 ;;
-    --gpu)          GPU="true";            shift 1 ;;
-    --gpu_id)       GPU_ID="$2";           shift 2 ;;
-    --runtime)      RUNTIME_MODE="$2";     shift 2 ;;
-    --gpu_mapping)  GPU_MAPPING_KEY="$2";  shift 2 ;;
-    --cpu_transfer) CPU_TRANSFER="$2";     shift 2 ;;
-    *) echo "Unknown argument: $1"; exit 1 ;;
-  esac
+	case $1 in
+	--model)
+		MODEL="$2"
+		shift 2
+		;;
+	--dataset)
+		DATASET="$2"
+		shift 2
+		;;
+	--attack)
+		ATTACK="$2"
+		shift 2
+		;;
+	--defense)
+		DEFENSE="$2"
+		shift 2
+		;;
+	--aggregator)
+		AGGREGATOR="$2"
+		shift 2
+		;;
+	--pmr)
+		PMR="$2"
+		shift 2
+		;;
+	--alpha)
+		ALPHA="$2"
+		shift 2
+		;;
+	--seed)
+		SEED="$2"
+		shift 2
+		;;
+	--rounds)
+		ROUNDS="$2"
+		shift 2
+		;;
+	--clients)
+		CLIENTS="$2"
+		shift 2
+		;;
+	--epochs)
+		EPOCHS="$2"
+		shift 2
+		;;
+	--batch_size)
+		BATCH="$2"
+		shift 2
+		;;
+	--max_samples)
+		MAX_SAMPLES="$2"
+		shift 2
+		;;
+	--test_subset)
+		TEST_SUBSET="$2"
+		shift 2
+		;;
+	--gpu)
+		GPU="true"
+		shift 1
+		;;
+	--gpu_id)
+		GPU_ID="$2"
+		shift 2
+		;;
+	--runtime)
+		RUNTIME_MODE="$2"
+		shift 2
+		;;
+	--gpu_mapping)
+		GPU_MAPPING_KEY="$2"
+		shift 2
+		;;
+	--cpu_transfer)
+		CPU_TRANSFER="$2"
+		shift 2
+		;;
+	*)
+		echo "Unknown argument: $1"
+		exit 1
+		;;
+	esac
 done
 
 # GPU 训练时 MPI 通信仍走 CPU tensor
 if [[ "$GPU" == "true" ]]; then
-  CPU_TRANSFER="true"
+	CPU_TRANSFER="true"
 fi
 
 # ----------- 计算攻击参数 -----------
@@ -68,27 +128,27 @@ BYZANTINE_NUM=0
 EVAL_ASR="false"
 
 if [[ "$ATTACK" != "none" ]]; then
-  ENABLE_ATTACK="true"
-  ATTACK_TYPE="$ATTACK"
-  BYZANTINE_NUM=$(python3 -c "import math; print(max(1, math.ceil($CLIENTS * $PMR)))")
-  if [[ "$ATTACK" == "model_replacement" ]]; then
-    EVAL_ASR="true"
-  fi
+	ENABLE_ATTACK="true"
+	ATTACK_TYPE="$ATTACK"
+	BYZANTINE_NUM=$(python3 -c "import math; print(max(1, math.ceil($CLIENTS * $PMR)))")
+	if [[ "$ATTACK" == "model_replacement" ]]; then
+		EVAL_ASR="true"
+	fi
 fi
 
 ENABLE_DEFENSE="false"
 DEFENSE_TYPE="none"
 TRIM_BETA="0.2"
 if [[ "$DEFENSE" != "none" ]]; then
-  ENABLE_DEFENSE="true"
-  DEFENSE_TYPE="$DEFENSE"
+	ENABLE_DEFENSE="true"
+	DEFENSE_TYPE="$DEFENSE"
 fi
 
 # ----------- 生成临时配置 -----------
 CONFIG_FILE="/tmp/shieldfl_exp_${MODEL}_${DATASET}_${ATTACK}_${DEFENSE}_a${ALPHA}_s${SEED}.yaml"
 WORKER_NUM=$CLIENTS
 
-cat > "$CONFIG_FILE" <<EOF
+cat >"$CONFIG_FILE" <<EOF
 common_args:
   training_type: "cross_silo"
   random_seed: ${SEED}
@@ -179,12 +239,17 @@ TOTAL_PROC=$((WORKER_NUM + 1))
 MPI_EXTRA_ARGS=""
 # 允许 root 用户运行 mpirun
 if [[ "$(id -u)" == "0" ]]; then
-  MPI_EXTRA_ARGS="--allow-run-as-root"
+	MPI_EXTRA_ARGS="--allow-run-as-root"
 fi
 # GPU 模式下固定 CUDA_VISIBLE_DEVICES 到指定 GPU
 if [[ "$GPU" == "true" ]]; then
-  export CUDA_VISIBLE_DEVICES="${GPU_ID}"
-  MPI_EXTRA_ARGS="${MPI_EXTRA_ARGS} -x CUDA_VISIBLE_DEVICES=${GPU_ID}"
+	export CUDA_VISIBLE_DEVICES="${GPU_ID}"
+	MPI_EXTRA_ARGS="${MPI_EXTRA_ARGS} -x CUDA_VISIBLE_DEVICES=${GPU_ID}"
 fi
 
-mpirun ${MPI_EXTRA_ARGS} -np $TOTAL_PROC python main_fedml_shieldfl.py --cf "$CONFIG_FILE"
+MPI_EXIT=0
+mpirun ${MPI_EXTRA_ARGS} -np $TOTAL_PROC python main_fedml_shieldfl.py --cf "$CONFIG_FILE" || MPI_EXIT=$?
+if [[ $MPI_EXIT -ne 0 ]]; then
+	echo "WARNING: mpirun exited with code $MPI_EXIT"
+fi
+exit $MPI_EXIT
