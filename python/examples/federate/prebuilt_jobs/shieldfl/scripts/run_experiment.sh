@@ -26,6 +26,7 @@ MAX_SAMPLES="300"
 VAL_PER_CLASS="50"
 TEST_SUBSET="500"
 GPU="false"
+GPU_ID="0"
 RUNTIME_MODE="cpu-deterministic"
 GPU_MAPPING_KEY="mapping_default"
 CPU_TRANSFER="true"
@@ -44,8 +45,10 @@ while [[ $# -gt 0 ]]; do
     --clients)    CLIENTS="$2";     shift 2 ;;
     --epochs)     EPOCHS="$2";      shift 2 ;;
     --batch_size) BATCH="$2";       shift 2 ;;
-    --max_samples) MAX_SAMPLES="$2"; shift 2 ;;
+    --max_samples)    MAX_SAMPLES="$2";    shift 2 ;;
+    --test_subset)   TEST_SUBSET="$2";    shift 2 ;;
     --gpu)          GPU="true";            shift 1 ;;
+    --gpu_id)       GPU_ID="$2";           shift 2 ;;
     --runtime)      RUNTIME_MODE="$2";     shift 2 ;;
     --gpu_mapping)  GPU_MAPPING_KEY="$2";  shift 2 ;;
     --cpu_transfer) CPU_TRANSFER="$2";     shift 2 ;;
@@ -167,4 +170,16 @@ echo "  config=${CONFIG_FILE}"
 
 cd "$SCRIPT_DIR"
 TOTAL_PROC=$((WORKER_NUM + 1))
-mpirun -np $TOTAL_PROC python main_fedml_shieldfl.py --cf "$CONFIG_FILE"
+
+MPI_EXTRA_ARGS=""
+# 允许 root 用户运行 mpirun
+if [[ "$(id -u)" == "0" ]]; then
+  MPI_EXTRA_ARGS="--allow-run-as-root"
+fi
+# GPU 模式下固定 CUDA_VISIBLE_DEVICES 到指定 GPU
+if [[ "$GPU" == "true" ]]; then
+  export CUDA_VISIBLE_DEVICES="${GPU_ID}"
+  MPI_EXTRA_ARGS="${MPI_EXTRA_ARGS} -x CUDA_VISIBLE_DEVICES=${GPU_ID}"
+fi
+
+mpirun ${MPI_EXTRA_ARGS} -np $TOTAL_PROC python main_fedml_shieldfl.py --cf "$CONFIG_FILE"

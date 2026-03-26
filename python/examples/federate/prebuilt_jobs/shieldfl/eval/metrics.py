@@ -32,8 +32,9 @@ class MetricsCollector:
         model_name = str(getattr(args, "model", "unknown"))
         dataset = str(getattr(args, "dataset", "unknown"))
         seed = str(getattr(args, "random_seed", 0))
+        alpha = str(getattr(args, "partition_alpha", "unknown"))
 
-        fname = f"metrics_{model_name}_{dataset}_{aggregator_type}_atk{attack_type}_def{defense_type}_seed{seed}.jsonl"
+        fname = f"metrics_{model_name}_{dataset}_{aggregator_type}_atk{attack_type}_def{defense_type}_a{alpha}_seed{seed}.jsonl"
         self.metrics_file = os.path.join(output_dir, fname)
         import torch
         self._meta = {
@@ -42,6 +43,7 @@ class MetricsCollector:
             "defense_type": defense_type,
             "model": model_name,
             "dataset": dataset,
+            "alpha": alpha,
             "runtime_mode": str(getattr(args, "runtime_mode", "unknown")),
             "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
             "cuda_version": torch.version.cuda if torch.cuda.is_available() else "N/A",

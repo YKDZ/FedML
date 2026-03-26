@@ -33,7 +33,7 @@ bash "$DIR/run_experiment.sh" \
   --pmr 0.0 --alpha 0.5 --seed "${SEED}" \
   --rounds 5 --clients 3 --epochs 1 --batch_size 32 \
   --max_samples 300 \
-  --gpu --runtime single-gpu-deterministic \
+  --gpu --gpu_id 0 --runtime single-gpu-deterministic \
   --gpu_mapping mapping_default
 
 for f in ./results/metrics_ResNet18_cifar10_fedavg_*.jsonl; do
@@ -61,7 +61,7 @@ bash "$DIR/run_experiment.sh" \
   --pmr 0.0 --alpha 0.5 --seed "${SEED}" \
   --rounds 3 --clients 3 --epochs 1 --batch_size 32 \
   --max_samples 300 \
-  --gpu --runtime single-gpu-deterministic \
+  --gpu --gpu_id 0 --runtime single-gpu-deterministic \
   --gpu_mapping mapping_default
 
 for f in ./results/metrics_ResNet18_cifar10_verifl_*.jsonl; do

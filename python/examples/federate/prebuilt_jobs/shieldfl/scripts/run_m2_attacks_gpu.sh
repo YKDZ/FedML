@@ -27,9 +27,9 @@ for ATTACK in $ATTACKS; do
           --model ResNet18 --dataset cifar10 \
           --attack "${ATTACK}" --defense none --aggregator fedavg \
           --pmr "${PMR}" --alpha "${ALPHA}" --seed "${SEED}" \
-          --rounds 100 --clients "${CLIENTS}" --epochs 1 --batch_size 32 \
-          --max_samples 300 \
-          --gpu --runtime single-gpu-deterministic \
+          --rounds 100 --clients "${CLIENTS}" --epochs 1 --batch_size 64 \
+          --max_samples 0 --test_subset 0 \
+          --gpu --gpu_id 0 --runtime single-gpu-deterministic \
           --gpu_mapping mapping_single_gpu
       done
     done
@@ -46,9 +46,9 @@ for ATTACK in $ATTACKS; do
           --model LeNet5 --dataset mnist \
           --attack "${ATTACK}" --defense none --aggregator fedavg \
           --pmr "${PMR}" --alpha "${ALPHA}" --seed "${SEED}" \
-          --rounds 100 --clients "${CLIENTS}" --epochs 1 --batch_size 32 \
-          --max_samples 300 \
-          --gpu --runtime single-gpu-deterministic \
+          --rounds 100 --clients "${CLIENTS}" --epochs 1 --batch_size 64 \
+          --max_samples 0 --test_subset 0 \
+          --gpu --gpu_id 0 --runtime single-gpu-deterministic \
           --gpu_mapping mapping_single_gpu
       done
     done
