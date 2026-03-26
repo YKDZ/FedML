@@ -46,8 +46,8 @@ for ALPHA in $ALPHAS; do
 			--rounds 100 --clients "${CLIENTS}" --epochs "${EPOCHS}" --batch_size 64 \
 			--max_samples 0 --test_subset 0 \
 			--gpu --gpu_id "${GPU_ID}" --runtime single-gpu-deterministic \
-			--gpu_mapping mapping_single_gpu ||
-			echo "WARNING: experiment failed, continuing..."
+			--gpu_mapping mapping_single_gpu \
+		|| echo "WARNING: experiment failed, continuing..."
 	done
 done
 
@@ -68,8 +68,8 @@ for ALPHA in $ALPHAS; do
 			--rounds 50 --clients "${CLIENTS}" --epochs "${EPOCHS}" --batch_size 64 \
 			--max_samples 0 --test_subset 0 \
 			--gpu --gpu_id "${GPU_ID}" --runtime single-gpu-deterministic \
-			--gpu_mapping mapping_single_gpu ||
-			echo "WARNING: experiment failed, continuing..."
+			--gpu_mapping mapping_single_gpu \
+		|| echo "WARNING: experiment failed, continuing..."
 	done
 done
 
