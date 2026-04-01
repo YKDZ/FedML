@@ -30,6 +30,9 @@ GPU_ID="0"
 RUNTIME_MODE="cpu-deterministic"
 GPU_MAPPING_KEY="mapping_default"
 CPU_TRANSFER="true"
+WEIGHT_DECAY="auto"
+SERVER_LR="1.0"
+LR="0.01"
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -109,6 +112,18 @@ while [[ $# -gt 0 ]]; do
 		CPU_TRANSFER="$2"
 		shift 2
 		;;
+	--weight_decay)
+		WEIGHT_DECAY="$2"
+		shift 2
+		;;
+	--server_lr)
+		SERVER_LR="$2"
+		shift 2
+		;;
+	--lr)
+		LR="$2"
+		shift 2
+		;;
 	*)
 		echo "Unknown argument: $1"
 		exit 1
@@ -119,6 +134,15 @@ done
 # GPU 训练时 MPI 通信仍走 CPU tensor
 if [[ "$GPU" == "true" ]]; then
 	CPU_TRANSFER="true"
+fi
+
+# 自动推导 weight_decay：CIFAR-10 用 1e-4，MNIST 用 0
+if [[ "$WEIGHT_DECAY" == "auto" ]]; then
+	if [[ "$DATASET" == "cifar10" ]]; then
+		WEIGHT_DECAY="0.0001"
+	else
+		WEIGHT_DECAY="0.0"
+	fi
 fi
 
 # ----------- 计算攻击参数 -----------
@@ -176,11 +200,11 @@ train_args:
   epochs: ${EPOCHS}
   batch_size: ${BATCH}
   client_optimizer: sgd
-  learning_rate: 0.01
-  weight_decay: 0.0
+  learning_rate: ${LR}
+  weight_decay: ${WEIGHT_DECAY}
   momentum: 0.9
-  server_momentum: 0.9
-  server_lr: 0.3
+  server_momentum: 0.0
+  server_lr: ${SERVER_LR}
   pop_size: 15
   generations: 10
   lambda_reg: 0.01
@@ -229,7 +253,8 @@ EOF
 echo "=== ShieldFL Experiment ==="
 echo "  model=${MODEL} dataset=${DATASET} attack=${ATTACK} defense=${DEFENSE}"
 echo "  aggregator=${AGGREGATOR} pmr=${PMR} alpha=${ALPHA} seed=${SEED}"
-echo "  rounds=${ROUNDS} clients=${CLIENTS} epochs=${EPOCHS}"
+echo "  rounds=${ROUNDS} clients=${CLIENTS} epochs=${EPOCHS} lr=${LR}"
+echo "  weight_decay=${WEIGHT_DECAY} server_lr=${SERVER_LR}"
 echo "  gpu=${GPU} runtime=${RUNTIME_MODE} gpu_mapping=${GPU_MAPPING_KEY}"
 echo "  config=${CONFIG_FILE}"
 
