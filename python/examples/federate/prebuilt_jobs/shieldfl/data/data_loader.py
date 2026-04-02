@@ -52,10 +52,9 @@ def _load_cifar10(data_path: str):
             transforms.Normalize(mean, std),
         ]
     )
+    # 方案B: 统一不使用数据增强（与 Fang 2025, Tang 2025, Cao 2022 一致）
     server_val_transform = transforms.Compose(
         [
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean, std),
         ]

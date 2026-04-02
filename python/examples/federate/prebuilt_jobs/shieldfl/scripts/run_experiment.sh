@@ -169,7 +169,7 @@ if [[ "$DEFENSE" != "none" ]]; then
 fi
 
 # ----------- 生成临时配置 -----------
-CONFIG_FILE="/tmp/shieldfl_exp_${MODEL}_${DATASET}_${ATTACK}_${DEFENSE}_a${ALPHA}_s${SEED}.yaml"
+CONFIG_FILE="/tmp/shieldfl_exp_${MODEL}_${DATASET}_${ATTACK}_${DEFENSE}_a${ALPHA}_pmr${PMR}_s${SEED}.yaml"
 WORKER_NUM=$CLIENTS
 
 cat >"$CONFIG_FILE" <<EOF
@@ -223,6 +223,9 @@ train_args:
   original_class_list: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
   target_class_list: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
   ratio_of_poisoned_client: ${PMR}
+  # model_replacement 后门攻击参数对齐说明:
+  # 核心代码 hasattr 检查 attack_training_rounds, isinstance 读取 poisoned_training_round
+  # 须同时设置两者为相同列表值；不设置时默认每轮攻击, scale_factor_S 不设置时 gamma=participant_num
 
 validation_args:
   frequency_of_the_test: 1
@@ -257,6 +260,13 @@ echo "  rounds=${ROUNDS} clients=${CLIENTS} epochs=${EPOCHS} lr=${LR}"
 echo "  weight_decay=${WEIGHT_DECAY} server_lr=${SERVER_LR}"
 echo "  gpu=${GPU} runtime=${RUNTIME_MODE} gpu_mapping=${GPU_MAPPING_KEY}"
 echo "  config=${CONFIG_FILE}"
+
+# WI-9: 持久化 YAML 配置副本
+PERSIST_DIR="./results/configs"
+mkdir -p "$PERSIST_DIR"
+PERSIST_NAME="config_${MODEL}_${DATASET}_${AGGREGATOR}_atk${ATTACK}_def${DEFENSE}_a${ALPHA}_pmr${PMR}_seed${SEED}.yaml"
+cp "$CONFIG_FILE" "${PERSIST_DIR}/${PERSIST_NAME}"
+echo "  persisted_config=${PERSIST_DIR}/${PERSIST_NAME}"
 
 cd "$SCRIPT_DIR"
 TOTAL_PROC=$((WORKER_NUM + 1))

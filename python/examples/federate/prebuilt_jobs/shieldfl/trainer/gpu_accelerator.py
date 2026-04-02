@@ -7,10 +7,11 @@ import torch
 
 
 class GPUAccelerator:
-    def __init__(self, model_template, validation_data, device=None):
+    def __init__(self, model_template, validation_data, device=None, seed=0):
         if device is None:
             raise ValueError("GPUAccelerator requires an explicit device from fedml.device.get_device(args)")
         self.device = device
+        self.seed = int(seed)
         self.model_template = copy.deepcopy(model_template).to(self.device)
         self.val_images, self.val_labels = validation_data
         self.val_images = self.val_images.to(self.device)
@@ -52,7 +53,7 @@ class GPUAccelerator:
     def recalibrate_batchnorm(self, params: List[np.ndarray], batch_size: int = 64, passes: int = 1):
         if not self.has_batchnorm:
             return params
-        torch.manual_seed(0)
+        torch.manual_seed(self.seed)
         self._load_state_from_ndarrays(params)
         self.model_template.train()
         with torch.no_grad():

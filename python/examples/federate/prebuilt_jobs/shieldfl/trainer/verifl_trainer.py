@@ -30,6 +30,14 @@ class VeriFLTrainer(ClientTrainer):
             model.parameters(),
             lr=float(getattr(args, "learning_rate", 0.01)),
             momentum=float(getattr(args, "momentum", 0.9)),
+            weight_decay=float(getattr(args, "weight_decay", 0.0)),
+        )
+        logging.info(
+            "Client %s optimizer | lr=%s momentum=%s weight_decay=%s",
+            self.id,
+            optimizer.defaults["lr"],
+            optimizer.defaults["momentum"],
+            optimizer.defaults["weight_decay"],
         )
         epoch_loss = []
         for epoch in range(int(getattr(args, "epochs", 1))):

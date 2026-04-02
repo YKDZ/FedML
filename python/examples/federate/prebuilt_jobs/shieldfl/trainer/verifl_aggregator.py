@@ -47,6 +47,7 @@ class VeriFLAggregator(ServerAggregator, MicroGABase):
             pop_size=getattr(args, "pop_size", 15),
             generations=getattr(args, "generations", 10),
             lambda_reg=getattr(args, "lambda_reg", 0.1),
+            seed=int(getattr(args, "random_seed", 0)),
         )
         self.server_momentum = float(getattr(args, "server_momentum", 0.9))
         self.server_lr = float(getattr(args, "server_lr", 0.3))
@@ -59,6 +60,7 @@ class VeriFLAggregator(ServerAggregator, MicroGABase):
             self.model,
             (data_assets.val_images, data_assets.val_labels),
             device=self.device,
+            seed=int(getattr(args, "random_seed", 0)),
         )
         self._last_agg_time: Optional[float] = None
 
