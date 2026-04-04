@@ -100,10 +100,9 @@ def get_malicious_client_id_list(random_seed, client_num, malicious_client_num):
         client_indexes = [client_index for client_index in range(client_num)]
     else:
         num_clients = min(malicious_client_num, client_num)
-        np.random.seed(
-            random_seed
-        )  # make sure for each comparison, we are selecting the same clients each round
-        client_indexes = np.random.choice(range(client_num), num_clients, replace=False)
+        # D6 fix: use isolated RNG instead of polluting global numpy state
+        rng = np.random.default_rng(random_seed)
+        client_indexes = rng.choice(range(client_num), num_clients, replace=False)
     print("malicious client_indexes = %s" % str(client_indexes))
     return client_indexes
 
@@ -112,15 +111,16 @@ def replace_original_class_with_target_class(
         data_labels, original_class_list=None, target_class_list=None
 ):
     """
-    :param targets: Target class IDs
-    :type targets: list
-    :return: new class IDs
+    :param data_labels: Label tensor or list to transform
+    :param original_class_list: Source class IDs
+    :param target_class_list: Target class IDs (same length as original)
+    :return: new labels with classes remapped
     """
     if (
-            len(original_class_list) == 0
-            or len(target_class_list) == 0
-            or original_class_list is None
+            original_class_list is None
             or target_class_list is None
+            or len(original_class_list) == 0
+            or len(target_class_list) == 0
     ):
         return data_labels
     if len(original_class_list) != len(target_class_list):
@@ -132,11 +132,15 @@ def replace_original_class_with_target_class(
     ):  # no need to check the targeted classes
         raise ValueError("the original classes can not be same")
 
-    for i in range(len(original_class_list)):
-        for idx in range(len(data_labels)):
-            if data_labels[idx] == original_class_list[i]:
-                data_labels[idx] = target_class_list[i]
-    return data_labels
+    # Build mapping dict and apply in one pass to avoid double-overwrite (D1 fix)
+    mapping = {int(orig): int(tgt) for orig, tgt in zip(original_class_list, target_class_list)}
+    if isinstance(data_labels, torch.Tensor):
+        new_labels = data_labels.clone()
+        for orig, tgt in mapping.items():
+            new_labels[data_labels == orig] = tgt
+        return new_labels
+    else:
+        return [mapping.get(int(l), int(l)) for l in data_labels]
 
 
 def log_client_data_statistics(poisoned_client_ids, train_data_local_dict):
