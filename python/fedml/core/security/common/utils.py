@@ -21,6 +21,11 @@ def is_weight_param(k):
     )
 
 
+def should_scale_param(k):
+    """num_batches_tracked 不参与缩放，其余参数（含 running_mean/running_var）全部参与。"""
+    return "num_batches_tracked" not in k
+
+
 def compute_euclidean_distance(v1, v2, device='cpu'):
     v1 = v1.to(device)
     v2 = v2.to(device)

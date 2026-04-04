@@ -33,6 +33,9 @@ CPU_TRANSFER="true"
 WEIGHT_DECAY="auto"
 SERVER_LR="1.0"
 LR="0.01"
+SCALE_GAMMA="10"
+BACKDOOR_PER_BATCH="20"
+ATTACK_ROUNDS=""
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -124,6 +127,18 @@ while [[ $# -gt 0 ]]; do
 		LR="$2"
 		shift 2
 		;;
+	--scale_gamma)
+		SCALE_GAMMA="$2"
+		shift 2
+		;;
+	--backdoor_per_batch)
+		BACKDOOR_PER_BATCH="$2"
+		shift 2
+		;;
+	--attack_rounds)
+		ATTACK_ROUNDS="$2"
+		shift 2
+		;;
 	*)
 		echo "Unknown argument: $1"
 		exit 1
@@ -157,6 +172,17 @@ if [[ "$ATTACK" != "none" ]]; then
 	BYZANTINE_NUM=$(python3 -c "import math; print(max(1, math.ceil($CLIENTS * $PMR)))")
 	if [[ "$ATTACK" == "model_replacement" ]]; then
 		EVAL_ASR="true"
+		# Auto-compute attack_training_rounds if not specified
+		if [[ -z "$ATTACK_ROUNDS" ]]; then
+			ATTACK_ROUNDS=$(python3 -c "
+rounds = $ROUNDS
+if rounds <= 5:
+    n = 2
+else:
+    n = 5
+print('[' + ', '.join(str(rounds - n + i) for i in range(n)) + ']')
+")
+		fi
 	fi
 fi
 
@@ -169,6 +195,21 @@ if [[ "$DEFENSE" != "none" ]]; then
 fi
 
 # ----------- 生成临时配置 -----------
+
+# Build attack-specific YAML fields
+ATTACK_EXTRA_YAML=""
+if [[ "$ATTACK" == "model_replacement" ]]; then
+	ATTACK_EXTRA_YAML="  scale_gamma: ${SCALE_GAMMA}
+  attack_training_rounds: ${ATTACK_ROUNDS}
+  backdoor_per_batch: ${BACKDOOR_PER_BATCH}
+  attacker_epochs: null
+  attacker_lr: null
+  attacker_weight_decay: null
+  attacker_noise_sigma: 0"
+elif [[ "$ATTACK" != "none" ]]; then
+	ATTACK_EXTRA_YAML="  attack_mode: \"flip\""
+fi
+
 CONFIG_FILE="/tmp/shieldfl_exp_${MODEL}_${DATASET}_${ATTACK}_${DEFENSE}_a${ALPHA}_pmr${PMR}_s${SEED}.yaml"
 WORKER_NUM=$CLIENTS
 
@@ -212,7 +253,6 @@ train_args:
   enable_attack: ${ENABLE_ATTACK}
   attack_type: "${ATTACK_TYPE}"
   byzantine_client_num: ${BYZANTINE_NUM}
-  attack_mode: "flip"
   enable_defense: ${ENABLE_DEFENSE}
   defense_type: "${DEFENSE_TYPE}"
   beta: ${TRIM_BETA}
@@ -223,9 +263,7 @@ train_args:
   original_class_list: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
   target_class_list: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
   ratio_of_poisoned_client: ${PMR}
-  # model_replacement 后门攻击参数对齐说明:
-  # 核心代码 hasattr 检查 attack_training_rounds, isinstance 读取 poisoned_training_round
-  # 须同时设置两者为相同列表值；不设置时默认每轮攻击, scale_factor_S 不设置时 gamma=participant_num
+${ATTACK_EXTRA_YAML}
 
 validation_args:
   frequency_of_the_test: 1
